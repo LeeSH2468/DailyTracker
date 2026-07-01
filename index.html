@@ -180,7 +180,7 @@
   .graph-card .sub { color: #b8b2a4; font-size: .84rem; margin-bottom: 22px; }
   .heat {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 7px;
     margin-bottom: 16px;
   }
@@ -194,6 +194,7 @@
     transition: background .3s;
   }
   .cell.today { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .cell.future { border: 1px dashed rgba(243,237,226,.18); color: rgba(243,237,226,.22); }
   .legend { display: flex; align-items: center; gap: 8px; font-size: .72rem; color: #b8b2a4; }
   .legend .swatch { width: 13px; height: 13px; border-radius: 3px; }
   .focus-note {
@@ -399,8 +400,8 @@
   <div id="tasks"></div>
 
   <div class="graph-card">
-    <h2>6주 습관 그래프</h2>
-    <div class="sub">칸이 짙어질수록 그 날을 충실히 보낸 것. 비어 있는 날은 그냥 내일 다시 칠하면 돼요.</div>
+    <h2>한 달 습관 그래프</h2>
+    <div class="sub">오늘이 첫 칸이에요. 칸이 짙어질수록 그 날을 충실히 보낸 것. 흐린 칸은 아직 오지 않은 날이에요.</div>
     <div class="heat" id="heat"></div>
     <div class="legend">
       <span>적음</span>
@@ -411,7 +412,7 @@
       <span>가득</span>
     </div>
     <div class="focus-note">
-      <b>지금 집중할 것 →</b> 다 지키려 애쓰지 말고, 처음 6주는 <b>저녁 2시간 딥워크</b> 하나만 흔들림 없이. 그게 습관이 되면 아침 90분을 더하세요.
+      <b>지금 집중할 것 →</b> 다 지키려 애쓰지 말고, 처음 한 달은 <b>저녁 2시간 딥워크</b> 하나만 흔들림 없이. 그게 습관이 되면 아침 90분을 더하세요.
     </div>
   </div>
 
@@ -508,13 +509,22 @@ const C = 238.76; // ring circumference
 let state = {};
 
 function todayKey(){
-  const d = new Date();
+  return keyFromDate(new Date());
+}
+function keyFromDate(d){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function dayLabel(){
   const d = new Date();
   const days=['일','월','화','수','목','금','토'];
   return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+}
+
+// 그래프 시작일(첫 사용일). 없으면 오늘로 저장.
+function getStartKey(){
+  let s = localStorage.getItem('startDate');
+  if(!s){ s = todayKey(); localStorage.setItem('startDate', s); }
+  return s;
 }
 
 function loadDay(key){
@@ -598,13 +608,18 @@ function levelFromRatio(r){
 const HEAT_COLORS = ['rgba(243,237,226,.08)','rgba(194,104,63,.25)','rgba(194,104,63,.45)','rgba(194,104,63,.7)','#c2683f'];
 
 function refreshStreakAndHeat(){
-  // build last 42 days (6 weeks), oldest -> newest
+  // 시작일(첫 사용일)부터 28일(4주). 오늘이 첫 칸 근처.
+  const SPAN = 30;
+  const startKey = getStartKey();
+  const [sy,sm,sd] = startKey.split('-').map(Number);
+  const start = new Date(sy, sm-1, sd);
+  const todayK = todayKey();
+
   const days = [];
-  const now = new Date();
-  for(let i=41;i>=0;i--){
-    const d = new Date(now); d.setDate(now.getDate()-i);
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    days.push({key, date:d, isToday: i===0});
+  for(let i=0;i<SPAN;i++){
+    const d = new Date(start); d.setDate(start.getDate()+i);
+    const key = keyFromDate(d);
+    days.push({ key, date:d, isToday: key===todayK, isFuture: key>todayK });
   }
   const data = days.map(dd=>{
     const dayData = dd.isToday ? state : loadDay(dd.key);
@@ -614,14 +629,18 @@ function refreshStreakAndHeat(){
   // heat grid
   let html='';
   data.forEach(dd=>{
-    const lvl = levelFromRatio(dd.ratio);
-    html += `<div class="cell ${dd.isToday?'today':''}" style="background:${HEAT_COLORS[lvl]}" title="${dd.key}">${dd.date.getDate()}</div>`;
+    const lvl = dd.isFuture ? 0 : levelFromRatio(dd.ratio);
+    const cls = ['cell'];
+    if(dd.isToday) cls.push('today');
+    if(dd.isFuture) cls.push('future');
+    html += `<div class="${cls.join(' ')}" style="background:${HEAT_COLORS[lvl]}" title="${dd.key}">${dd.date.getDate()}</div>`;
   });
   document.getElementById('heat').innerHTML = html;
 
-  // streak: count back from today while ratio is "meaningful" (>=1 core or >=34%)
+  // streak: 오늘부터 과거로, 충실히 보낸 날 연속 카운트 (미래 제외)
   let streak=0;
-  for(let i=data.length-1;i>=0;i--){
+  const todayIdx = data.findIndex(d=>d.isToday);
+  for(let i=todayIdx;i>=0;i--){
     if(data[i].ratio>=0.34) streak++;
     else break;
   }
@@ -647,7 +666,7 @@ function init(){
     const dump = {};
     for(let i=0;i<localStorage.length;i++){
       const k = localStorage.key(i);
-      if(k && (k.startsWith('day:') || k==='config')) dump[k] = localStorage.getItem(k);
+      if(k && (k.startsWith('day:') || k==='config' || k==='startDate')) dump[k] = localStorage.getItem(k);
     }
     const payload = { app:'daily-tracker', version:2, exportedAt:new Date().toISOString(), data:dump };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
@@ -676,6 +695,7 @@ function init(){
         Object.keys(data).forEach(k=>{
           if(k.startsWith('day:')){ localStorage.setItem(k, data[k]); count++; }
           if(k==='config'){ localStorage.setItem('config', data[k]); }
+          if(k==='startDate'){ localStorage.setItem('startDate', data[k]); }
         });
         config = loadConfig(); TASKS = config.tasks; applyHeader();
         state = loadDay(todayKey());
