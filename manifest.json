@@ -1,0 +1,25 @@
+{
+  "name": "데일리 트래커 · 미래로 가는 길",
+  "short_name": "데일리 트래커",
+  "description": "월 1,000만원 목표를 향한 하루 루틴 트래커",
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3ede2",
+  "theme_color": "#f3ede2",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
